@@ -78,7 +78,11 @@ struct TextProcessor {
         var t = text
         t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         t = t.replacingOccurrences(of: "\\s+([,.!?;:])", with: "$1", options: .regularExpression)
-        t = t.replacingOccurrences(of: "([,.!?;:])(?=\\p{L})", with: "$1 ", options: .regularExpression)
+        // Space after commas/semicolons before any letter…
+        t = t.replacingOccurrences(of: "([,;:])(?=\\p{L})", with: "$1 ", options: .regularExpression)
+        // …but after sentence punctuation only before an uppercase letter,
+        // so abbreviations like "p.m." or "e.g." stay intact.
+        t = t.replacingOccurrences(of: "([.!?])(?=\\p{Lu})", with: "$1 ", options: .regularExpression)
         t = t.trimmingCharacters(in: .whitespacesAndNewlines)
         if let first = t.first, first.isLowercase {
             t = first.uppercased() + t.dropFirst()

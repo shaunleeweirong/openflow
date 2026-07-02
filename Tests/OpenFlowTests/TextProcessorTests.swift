@@ -94,6 +94,13 @@ final class TextProcessorTests: XCTestCase {
         XCTAssertEqual(processor().process("hello there"), "Hello there")
     }
 
+    func testPreservesAbbreviations() {
+        XCTAssertEqual(
+            processor().process("the meeting is at 3 p.m. Tomorrow works too, e.g. at 9 a.m."),
+            "The meeting is at 3 p.m. Tomorrow works too, e.g. at 9 a.m."
+        )
+    }
+
     func testEmptyAndFillerOnlyInput() {
         XCTAssertEqual(processor().process(""), "")
         XCTAssertEqual(processor().process("   "), "")

@@ -1,0 +1,100 @@
+import SwiftUI
+import KeyboardShortcuts
+
+struct SettingsView: View {
+    @ObservedObject var settings: SettingsStore
+
+    @State private var entries: [DictionaryEntry] = []
+    @State private var newSpoken = ""
+    @State private var newWritten = ""
+
+    var body: some View {
+        Form {
+            Section("Hotkey") {
+                KeyboardShortcuts.Recorder("Push-to-talk (hold):", name: .pushToTalk)
+                Text("Hold to record, release to transcribe.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Cleanup") {
+                Toggle("Remove filler words (um, uh…)", isOn: bind(\.removeFillers))
+                Toggle("Play start/stop sounds", isOn: bind(\.playSounds))
+            }
+
+            Section("Text insertion") {
+                Picker("Insert text by", selection: bind(\.injectionMode)) {
+                    Text("Pasting (recommended)").tag(TextInjector.Mode.paste)
+                    Text("Typing it out").tag(TextInjector.Mode.type)
+                }
+                Toggle("Restore clipboard after pasting", isOn: bind(\.restoreClipboard))
+            }
+
+            Section("Model") {
+                Picker("Parakeet model", selection: bind(\.modelVersion)) {
+                    Text("v3 — 25 European languages").tag("v3")
+                    Text("v2 — English only, best recall").tag("v2")
+                }
+                Text("Changing the model takes effect after relaunching OpenFlow (new model downloads on next launch).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Custom dictionary") {
+                Text("Fix words the model gets wrong: names, jargon, acronyms.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ForEach(entries) { entry in
+                    HStack {
+                        Text(entry.spoken)
+                        Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                        Text(entry.written).fontWeight(.medium)
+                        Spacer()
+                        Button(role: .destructive) {
+                            entries.removeAll { $0.id == entry.id }
+                            settings.dictionaryEntries = entries
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+
+                HStack {
+                    TextField("Heard as (e.g. super base)", text: $newSpoken)
+                    Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                    TextField("Replace with (e.g. Supabase)", text: $newWritten)
+                    Button("Add") {
+                        let entry = DictionaryEntry(
+                            spoken: newSpoken.trimmingCharacters(in: .whitespaces),
+                            written: newWritten.trimmingCharacters(in: .whitespaces)
+                        )
+                        guard !entry.spoken.isEmpty, !entry.written.isEmpty else { return }
+                        entries.append(entry)
+                        settings.dictionaryEntries = entries
+                        newSpoken = ""
+                        newWritten = ""
+                    }
+                    .disabled(newSpoken.trimmingCharacters(in: .whitespaces).isEmpty
+                        || newWritten.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+
+            Section("General") {
+                Toggle("Launch at login", isOn: bind(\.launchAtLogin))
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 480, height: 520)
+        .onAppear { entries = settings.dictionaryEntries }
+    }
+
+    /// Bridge SettingsStore's plain properties into SwiftUI bindings.
+    private func bind<T>(_ keyPath: ReferenceWritableKeyPath<SettingsStore, T>) -> Binding<T> {
+        Binding(
+            get: { settings[keyPath: keyPath] },
+            set: { settings[keyPath: keyPath] = $0 }
+        )
+    }
+}

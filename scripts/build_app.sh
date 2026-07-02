@@ -1,0 +1,64 @@
+#!/bin/bash
+# Builds OpenFlow.app from the SwiftPM executable.
+# Usage: scripts/build_app.sh [--debug]
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CONFIG="release"
+if [[ "${1:-}" == "--debug" ]]; then
+  CONFIG="debug"
+fi
+
+echo "==> swift build -c $CONFIG"
+swift build -c "$CONFIG"
+
+BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
+APP_DIR="build/OpenFlow.app"
+
+echo "==> Assembling $APP_DIR"
+rm -rf "$APP_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+
+cp "$BIN_DIR/OpenFlow" "$APP_DIR/Contents/MacOS/OpenFlow"
+
+# SPM resource bundles (e.g. KeyboardShortcuts localizations) must sit in
+# Contents/Resources for Bundle.module lookup to succeed inside an .app.
+find "$BIN_DIR" -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP_DIR/Contents/Resources/" \;
+
+cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>OpenFlow</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.shaunlee.OpenFlow</string>
+    <key>CFBundleName</key>
+    <string>OpenFlow</string>
+    <key>CFBundleDisplayName</key>
+    <string>OpenFlow</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>OpenFlow listens while you hold the push-to-talk hotkey so it can transcribe your speech — entirely on this Mac.</string>
+</dict>
+</plist>
+PLIST
+
+echo "==> Codesigning (ad-hoc)"
+codesign --force --deep -s - "$APP_DIR"
+
+echo "==> Done: $APP_DIR"
+echo "    Launch with: open $APP_DIR"

@@ -31,6 +31,22 @@ hold ⌥Space ─▶ mic capture ─▶ Parakeet-TDT ASR (on-device, ANE)
 - macOS 14+ on Apple Silicon
 - ~1.5 GB disk for the speech model (downloaded once on first launch)
 
+## Install
+
+Download the latest **`OpenFlow-*.dmg`** from the
+[**Releases page**](https://github.com/shaunleeweirong/openflow/releases/latest) —
+no source checkout or Xcode needed:
+
+1. Open the `.dmg` and drag **OpenFlow** into **Applications**.
+2. First open is blocked by Gatekeeper (the app is ad-hoc signed, not notarized).
+   Bypass it once via **System Settings → Privacy & Security → Open Anyway**, or
+   from Terminal:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/OpenFlow.app
+   ```
+3. Grant **Microphone** and **Accessibility** when prompted; the speech model
+   (~1 GB) downloads once on first launch (needs internet), then runs offline.
+
 ## Build & run
 
 ```bash
@@ -44,6 +60,25 @@ permissions and downloads the speech model (~1 GB, one time).
 > Dev note: ad-hoc-signed builds get a new code-signing identity each rebuild,
 > so macOS will ask you to re-grant Accessibility after rebuilding. This
 > stops once the app is Developer-ID signed.
+
+## Cutting a release (maintainers)
+
+Package the app into a disk image and publish it to GitHub Releases so people can
+[install it](#install) without building from source:
+
+```bash
+scripts/make_dmg.sh                                    # → build/OpenFlow-0.1.0.dmg
+gh release create v0.1.0 build/OpenFlow-0.1.0.dmg \
+  --title "OpenFlow 0.1.0" --notes "See install steps in the README."
+```
+
+`make_dmg.sh` builds a fresh release app and wraps it in a drag-to-Applications
+DMG using only the built-in `hdiutil` — no extra tooling.
+
+> Note: the DMG is ad-hoc signed (not notarized), so each new release gets a new
+> signature and users must re-grant Accessibility after updating. Developer-ID
+> signing + notarization (paid Apple Developer account) removes both the
+> Gatekeeper prompt and the re-grant.
 
 ### Headless ASR smoke test
 

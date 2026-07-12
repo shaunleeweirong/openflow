@@ -22,11 +22,19 @@ struct TextProcessor {
             text = Self.stripFillers(text)
         }
         text = Self.collapseRepeats(text)
-        for entry in dictionary where !entry.spoken.isEmpty {
-            text = Self.substitute(entry, in: text)
-        }
+        text = Self.applyDictionary(text, dictionary)
         text = Self.tidy(text)
         return text
+    }
+
+    /// Whole-word, case-insensitive substitution of every dictionary entry. Extracted so
+    /// the enhancement pipeline can guarantee custom spellings on an LLM's output too.
+    static func applyDictionary(_ text: String, _ dictionary: [DictionaryEntry]) -> String {
+        var result = text
+        for entry in dictionary where !entry.spoken.isEmpty {
+            result = substitute(entry, in: result)
+        }
+        return result
     }
 
     // MARK: - Rules

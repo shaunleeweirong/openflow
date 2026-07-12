@@ -22,6 +22,20 @@ struct SettingsView: View {
                 Toggle("Play start/stop sounds", isOn: bind(\.playSounds))
             }
 
+            Section("AI cleanup") {
+                Toggle("Enhance with on-device AI", isOn: bind(\.aiEnhance))
+                    .disabled(!EnhancerSupport.isAvailable)
+                if EnhancerSupport.isAvailable {
+                    Text("Fixes grammar, fillers, and punctuation on-device via Apple Intelligence — nothing leaves your Mac. Falls back to rule-based cleanup if it can't run.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Requires macOS 26 with Apple Intelligence enabled. Using rule-based cleanup for now.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Text insertion") {
                 Picker("Insert text by", selection: bind(\.injectionMode)) {
                     Text("Pasting (recommended)").tag(TextInjector.Mode.paste)

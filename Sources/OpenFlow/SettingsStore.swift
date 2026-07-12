@@ -13,6 +13,7 @@ final class SettingsStore: ObservableObject {
         static let modelVersion = "modelVersion"
         static let dictionaryEntries = "dictionaryEntries"
         static let onboardingCompleted = "onboardingCompleted"
+        static let aiEnhance = "aiEnhance"
     }
 
     private let defaults = UserDefaults.standard
@@ -25,6 +26,7 @@ final class SettingsStore: ObservableObject {
             Keys.playSounds: true,
             Keys.modelVersion: "v3",
             Keys.onboardingCompleted: false,
+            Keys.aiEnhance: true,
         ])
     }
 
@@ -57,6 +59,13 @@ final class SettingsStore: ObservableObject {
     var onboardingCompleted: Bool {
         get { defaults.bool(forKey: Keys.onboardingCompleted) }
         set { defaults.set(newValue, forKey: Keys.onboardingCompleted); objectWillChange.send() }
+    }
+
+    /// On-device AI cleanup pass (Apple Foundation Models). Falls back to rule-based
+    /// cleanup when off or unavailable. Default on; effective only when the enhancer reports available.
+    var aiEnhance: Bool {
+        get { defaults.bool(forKey: Keys.aiEnhance) }
+        set { defaults.set(newValue, forKey: Keys.aiEnhance); objectWillChange.send() }
     }
 
     var dictionaryEntries: [DictionaryEntry] {

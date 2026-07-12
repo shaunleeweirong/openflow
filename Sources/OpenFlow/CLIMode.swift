@@ -42,3 +42,32 @@ func runTranscribeCLI(path: String) {
 
     dispatchMain()
 }
+
+/// Headless smoke test for the AI enhancer: clean up a line of text and exit.
+///   OpenFlow --enhance "um so like the the meeting is at 3 p.m."
+@available(macOS 26, *)
+func runEnhanceCLI(text: String) {
+    Task.detached {
+        let enhancer = AppleFoundationEnhancer()
+        guard enhancer.isAvailable else {
+            FileHandle.standardError.write(
+                "ERROR: Foundation model unavailable (Apple Intelligence off or model not ready)\n"
+                    .data(using: .utf8)!)
+            exit(1)
+        }
+        do {
+            let t0 = Date()
+            let out = try await enhancer.enhance(
+                text, vocabulary: SettingsStore.shared.dictionaryEntries)
+            let elapsed = Date().timeIntervalSince(t0)
+            print("INPUT:    \(text)")
+            print("ENHANCED: \(out)")
+            print("time:     \(String(format: "%.2f", elapsed))s")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write("ERROR: \(error)\n".data(using: .utf8)!)
+            exit(1)
+        }
+    }
+    dispatchMain()
+}

@@ -57,8 +57,21 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-echo "==> Codesigning (ad-hoc)"
-codesign --force --deep -s - "$APP_DIR"
+# Sign with a stable identity so macOS TCC grants (Accessibility, Microphone) survive
+# rebuilds. Ad-hoc signing changes the code hash every build and resets those grants.
+# Prefer an explicit override, else the first valid code-signing identity on this machine
+# (e.g. an "Apple Development" cert), else fall back to ad-hoc.
+SIGN_ID="${OPENFLOW_SIGN_ID:-}"
+if [ -z "$SIGN_ID" ]; then
+  SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/"/{print $2; exit}')"
+fi
+if [ -n "$SIGN_ID" ]; then
+  echo "==> Codesigning with: $SIGN_ID"
+  codesign --force --deep -s "$SIGN_ID" "$APP_DIR"
+else
+  echo "==> Codesigning (ad-hoc — grants reset each rebuild; see README for a stable cert)"
+  codesign --force --deep -s - "$APP_DIR"
+fi
 
 echo "==> Done: $APP_DIR"
 echo "    Launch with: open $APP_DIR"

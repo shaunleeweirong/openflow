@@ -26,7 +26,7 @@ final class SettingsStore: ObservableObject {
             Keys.playSounds: true,
             Keys.modelVersion: "v3",
             Keys.onboardingCompleted: false,
-            Keys.aiEnhance: true,
+            Keys.aiEnhance: false,
         ])
     }
 
@@ -62,7 +62,8 @@ final class SettingsStore: ObservableObject {
     }
 
     /// On-device AI cleanup pass (Apple Foundation Models). Falls back to rule-based
-    /// cleanup when off or unavailable. Default on; effective only when the enhancer reports available.
+    /// cleanup when off or unavailable. Default OFF (opt-in): the LLM adds ~1s per
+    /// dictation vs the instant rule-based path, so instant is the default.
     var aiEnhance: Bool {
         get { defaults.bool(forKey: Keys.aiEnhance) }
         set { defaults.set(newValue, forKey: Keys.aiEnhance); objectWillChange.send() }

@@ -26,7 +26,7 @@ struct SettingsView: View {
                 Toggle("Enhance with on-device AI", isOn: bind(\.aiEnhance))
                     .disabled(!EnhancerSupport.isAvailable)
                 if EnhancerSupport.isAvailable {
-                    Text("Fixes grammar, fillers, and punctuation on-device via Apple Intelligence — nothing leaves your Mac. Falls back to rule-based cleanup if it can't run.")
+                    Text("Fixes grammar, fillers, and punctuation on-device via Apple Intelligence — nothing leaves your Mac. Adds about a second per dictation; off by default (the rule-based cleanup is instant).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {

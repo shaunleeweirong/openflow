@@ -65,7 +65,13 @@ PLIST
 # timestamp that notarization requires.
 SIGN_ID="${OPENFLOW_SIGN_ID:-}"
 if [ -z "$SIGN_ID" ]; then
-  SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/"/{print $2; exit}')"
+  # Prefer a "Developer ID Application" cert so local builds use the SAME identity as
+  # release.sh. Same identity = same TCC "designated requirement", so the Accessibility
+  # and Microphone grants persist across every build (dev and release). Switching between
+  # different certs — e.g. Apple Development vs Developer ID — silently breaks those grants.
+  # Fall back to the first valid identity, then to ad-hoc.
+  SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+  [ -z "$SIGN_ID" ] && SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/"/{print $2; exit}')"
 fi
 
 SIGN_ARGS=(--force --deep)

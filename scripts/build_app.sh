@@ -61,13 +61,22 @@ PLIST
 # rebuilds. Ad-hoc signing changes the code hash every build and resets those grants.
 # Prefer an explicit override, else the first valid code-signing identity on this machine
 # (e.g. an "Apple Development" cert), else fall back to ad-hoc.
+# Set OPENFLOW_HARDENED=1 (used by release.sh) to add the Hardened Runtime + secure
+# timestamp that notarization requires.
 SIGN_ID="${OPENFLOW_SIGN_ID:-}"
 if [ -z "$SIGN_ID" ]; then
   SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/"/{print $2; exit}')"
 fi
+
+SIGN_ARGS=(--force --deep)
+[ -f "OpenFlow.entitlements" ] && SIGN_ARGS+=(--entitlements "OpenFlow.entitlements")
+if [ "${OPENFLOW_HARDENED:-0}" = "1" ]; then
+  SIGN_ARGS+=(--options runtime --timestamp)
+fi
+
 if [ -n "$SIGN_ID" ]; then
-  echo "==> Codesigning with: $SIGN_ID"
-  codesign --force --deep -s "$SIGN_ID" "$APP_DIR"
+  echo "==> Codesigning with: $SIGN_ID (hardened=${OPENFLOW_HARDENED:-0})"
+  codesign "${SIGN_ARGS[@]}" -s "$SIGN_ID" "$APP_DIR"
 else
   echo "==> Codesigning (ad-hoc — grants reset each rebuild; see README for a stable cert)"
   codesign --force --deep -s - "$APP_DIR"

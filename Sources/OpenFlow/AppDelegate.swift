@@ -48,8 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Kick off model download/load in the background right away.
         Task { try? await engine.prepare() }
-        // Warm the on-device LLM (if available) so the first enhanced dictation is fast.
-        enhancer?.prewarm()
+        // Warm the on-device LLM only when AI cleanup is on — no point loading a ~3B model
+        // (or contending for the Neural Engine) when the enhancer won't run.
+        if settings.aiEnhance { enhancer?.prewarm() }
 
         permissions.refresh()
         if !permissions.allGranted || !settings.onboardingCompleted {
@@ -73,8 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try capture.start()
             menuBar.setState(.recording)
-            // Re-warm while the user speaks so the LLM is hot by key-release.
-            enhancer?.prewarm()
+            // Re-warm while the user speaks so the LLM is hot by key-release — only when
+            // AI cleanup is on, so the instant rule-based path never loads the model.
+            if settings.aiEnhance { enhancer?.prewarm() }
             playSound("Pop")
         } catch {
             menuBar.setState(.error(error.localizedDescription))

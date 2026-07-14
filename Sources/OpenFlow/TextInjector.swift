@@ -91,10 +91,15 @@ final class TextInjector {
     }
 
     private func snapshotPasteboard(_ pasteboard: NSPasteboard) -> [PasteboardItemSnapshot] {
-        (pasteboard.pasteboardItems ?? []).map { item in
+        // Cap per-representation size so an enormous clipboard item (e.g. a large
+        // uncompressed image) can't bloat the snapshot or stall the paste. Smaller
+        // representations of the same content are still captured, so restore usually survives.
+        let maxBytes = 20 * 1024 * 1024
+        return (pasteboard.pasteboardItems ?? []).map { item in
             PasteboardItemSnapshot(
                 typeData: item.types.compactMap { type in
-                    item.data(forType: type).map { (type, $0) }
+                    guard let data = item.data(forType: type), data.count <= maxBytes else { return nil }
+                    return (type, data)
                 }
             )
         }

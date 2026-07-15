@@ -57,8 +57,36 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-echo "==> Codesigning (ad-hoc)"
-codesign --force --deep -s - "$APP_DIR"
+# Sign with a stable identity so macOS TCC grants (Accessibility, Microphone) survive
+# rebuilds. Ad-hoc signing changes the code hash every build and resets those grants.
+# Prefer an explicit override, else the first valid code-signing identity on this machine
+# (e.g. an "Apple Development" cert), else fall back to ad-hoc.
+# Set OPENFLOW_HARDENED=1 (used by release.sh) to add the Hardened Runtime + secure
+# timestamp that notarization requires.
+SIGN_ID="${OPENFLOW_SIGN_ID:-}"
+if [ -z "$SIGN_ID" ]; then
+  # Prefer a "Developer ID Application" cert so local builds use the SAME identity as
+  # release.sh. Same identity = same TCC "designated requirement", so the Accessibility
+  # and Microphone grants persist across every build (dev and release). Switching between
+  # different certs — e.g. Apple Development vs Developer ID — silently breaks those grants.
+  # Fall back to the first valid identity, then to ad-hoc.
+  SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+  [ -z "$SIGN_ID" ] && SIGN_ID="$(security find-identity -v -p codesigning | awk -F'"' '/"/{print $2; exit}')"
+fi
+
+SIGN_ARGS=(--force --deep)
+[ -f "OpenFlow.entitlements" ] && SIGN_ARGS+=(--entitlements "OpenFlow.entitlements")
+if [ "${OPENFLOW_HARDENED:-0}" = "1" ]; then
+  SIGN_ARGS+=(--options runtime --timestamp)
+fi
+
+if [ -n "$SIGN_ID" ]; then
+  echo "==> Codesigning with: $SIGN_ID (hardened=${OPENFLOW_HARDENED:-0})"
+  codesign "${SIGN_ARGS[@]}" -s "$SIGN_ID" "$APP_DIR"
+else
+  echo "==> Codesigning (ad-hoc — grants reset each rebuild; see README for a stable cert)"
+  codesign --force --deep -s - "$APP_DIR"
+fi
 
 echo "==> Done: $APP_DIR"
 echo "    Launch with: open $APP_DIR"

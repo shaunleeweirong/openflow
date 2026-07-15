@@ -9,10 +9,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let injector = TextInjector()
     private let permissions = PermissionsManager()
     private let settings = SettingsStore.shared
+    private let enhancer: Enhancer? = {
+        if #available(macOS 26, *) { return AppleFoundationEnhancer() }
+        return nil
+    }()
 
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var lastTranscript = ""
+    private var lastRawTranscript = ""
 
     // Ignore accidental taps shorter than this many 16 kHz samples (~0.3 s).
     private let minimumSamples = 4_800
@@ -26,6 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(self.lastTranscript, forType: .string)
         }
+        menuBar.onCopyRawTranscript = { [weak self] in
+            guard let self, !self.lastRawTranscript.isEmpty else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(self.lastRawTranscript, forType: .string)
+        }
 
         engine.onStateChange = { [weak self] state in
             DispatchQueue.main.async { self?.handleEngineState(state) }
@@ -38,6 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Kick off model download/load in the background right away.
         Task { try? await engine.prepare() }
+        // Warm the on-device LLM only when AI cleanup is on — no point loading a ~3B model
+        // (or contending for the Neural Engine) when the enhancer won't run.
+        if settings.aiEnhance { enhancer?.prewarm() }
 
         permissions.refresh()
         if !permissions.allGranted || !settings.onboardingCompleted {
@@ -61,6 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try capture.start()
             menuBar.setState(.recording)
+            // Re-warm while the user speaks so the LLM is hot by key-release — only when
+            // AI cleanup is on, so the instant rule-based path never loads the model.
+            if settings.aiEnhance { enhancer?.prewarm() }
             playSound("Pop")
         } catch {
             menuBar.setState(.error(error.localizedDescription))
@@ -82,12 +98,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             do {
                 let raw = try await self.engine.transcribe(samples: samples)
-                let processor = TextProcessor(
+                let pipeline = EnhancementPipeline(
+                    enhancer: self.enhancer,
+                    aiEnhanceEnabled: self.settings.aiEnhance,
                     removeFillers: self.settings.removeFillers,
                     dictionary: self.settings.dictionaryEntries
                 )
-                let cleaned = processor.process(raw)
+                let cleaned = await pipeline.run(raw)
                 await MainActor.run {
+                    self.lastRawTranscript = raw
                     self.lastTranscript = cleaned
                     self.menuBar.setLastTranscript(cleaned)
                     if !cleaned.isEmpty {

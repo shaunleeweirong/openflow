@@ -38,6 +38,7 @@ final class MenuBarController {
     var onOpenSettings: (() -> Void)?
     var onOpenPermissions: (() -> Void)?
     var onCopyLastTranscript: (() -> Void)?
+    var onCopyRawTranscript: (() -> Void)?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -52,6 +53,9 @@ final class MenuBarController {
         let copyItem = NSMenuItem(title: "Copy Last Transcript", action: #selector(copyLast), keyEquivalent: "c")
         copyItem.target = self
         menu.addItem(copyItem)
+        let copyRawItem = NSMenuItem(title: "Copy Raw Transcript", action: #selector(copyRaw), keyEquivalent: "")
+        copyRawItem.target = self
+        menu.addItem(copyRawItem)
         menu.addItem(.separator())
 
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
@@ -94,4 +98,5 @@ final class MenuBarController {
     @objc private func openSettings() { onOpenSettings?() }
     @objc private func openPermissions() { onOpenPermissions?() }
     @objc private func copyLast() { onCopyLastTranscript?() }
+    @objc private func copyRaw() { onCopyRawTranscript?() }
 }

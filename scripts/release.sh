@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.1.0"                       # keep in sync with build_app.sh Info.plist
+VERSION="0.2.0"                       # keep in sync with build_app.sh Info.plist
 APP_DIR="build/OpenFlow.app"
 DMG_PATH="build/OpenFlow-${VERSION}.dmg"
 ZIP_PATH="build/OpenFlow-notarize.zip"

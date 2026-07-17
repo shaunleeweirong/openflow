@@ -15,6 +15,7 @@ struct InsightsView: View {
                 } else {
                     statGrid
                     streakCard
+                    heatmapCard
                     if !snap.perApp.isEmpty { perAppCard }
                     achievementsCard
                 }
@@ -62,19 +63,71 @@ struct InsightsView: View {
 
     private var streakCard: some View {
         card("Streak") {
-            HStack(spacing: 22) {
-                streakStat("\(snap.currentDailyStreak)", "day streak", flame: true)
-                streakStat("\(snap.longestDailyStreak)", "longest", flame: false)
-                streakStat("\(snap.currentWeeklyStreak)", "weeks", flame: false)
-                Spacer()
-                VStack(spacing: 3) {
-                    Image(systemName: snap.isActiveToday ? "checkmark.seal.fill" : "circle.dashed")
-                        .font(.title3)
-                        .foregroundStyle(snap.isActiveToday ? .green : .secondary)
-                    Text(snap.isActiveToday ? "Active today" : "Not yet today")
-                        .font(.caption2).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 22) {
+                    streakStat("\(snap.currentDailyStreak)", "day streak", flame: true)
+                    streakStat("\(snap.longestDailyStreak)", "longest", flame: false)
+                    streakStat("\(snap.currentWeeklyStreak)", "weeks", flame: false)
+                    Spacer()
+                    VStack(spacing: 3) {
+                        Image(systemName: snap.isActiveToday ? "checkmark.seal.fill" : "circle.dashed")
+                            .font(.title3)
+                            .foregroundStyle(snap.isActiveToday ? .green : .secondary)
+                        Text(snap.isActiveToday ? "Active today" : "Not yet today")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                Label(freezeText, systemImage: "snowflake")
+                    .font(.caption2)
+                    .foregroundStyle(snap.freezesAvailable > 0 ? Color.cyan : .secondary)
+            }
+        }
+    }
+
+    private var freezeText: String {
+        if snap.freezesAvailable > 0 {
+            let plural = snap.freezesAvailable == 1 ? "" : "s"
+            return "\(snap.freezesAvailable) streak freeze\(plural) banked — a missed day won't break your streak"
+        }
+        return "Dictate 7 days in a row to earn a streak freeze"
+    }
+
+    private var heatmapCard: some View {
+        card("Activity", subtitle: "last \(snap.heatmap.count) weeks") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 3) {
+                    ForEach(Array(snap.heatmap.enumerated()), id: \.offset) { _, week in
+                        VStack(spacing: 3) {
+                            ForEach(week) { cell in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(cell.isFuture ? Color.clear : levelColor(cell.level))
+                                    .frame(width: 11, height: 11)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .strokeBorder(cell.isToday ? Color.primary.opacity(0.6) : .clear, lineWidth: 1)
+                                    )
+                            }
+                        }
+                    }
+                }
+                HStack(spacing: 4) {
+                    Text("Less").font(.caption2).foregroundStyle(.secondary)
+                    ForEach(0..<5, id: \.self) { lvl in
+                        RoundedRectangle(cornerRadius: 2).fill(levelColor(lvl)).frame(width: 10, height: 10)
+                    }
+                    Text("More").font(.caption2).foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    private func levelColor(_ level: Int) -> Color {
+        switch level {
+        case 0: return Color.secondary.opacity(0.15)
+        case 1: return Color.accentColor.opacity(0.3)
+        case 2: return Color.accentColor.opacity(0.5)
+        case 3: return Color.accentColor.opacity(0.75)
+        default: return Color.accentColor
         }
     }
 

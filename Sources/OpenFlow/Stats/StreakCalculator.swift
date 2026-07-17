@@ -5,68 +5,70 @@ struct StreakResult: Equatable {
     var longestDailyStreak: Int
     var currentWeeklyStreak: Int
     var isActiveToday: Bool
+    var freezesAvailable: Int
 }
 
 /// Pure streak math over the set of active day keys. Inject `now` and a `Calendar` (which
-/// carries the user's timezone) so results are deterministic and testable. All stepping is
-/// by calendar day/week — never by subtracting 86 400 seconds — so DST days stay consecutive.
+/// carries the user's timezone) so results are deterministic and testable. All stepping is by
+/// calendar day/week — never by subtracting 86 400 seconds — so DST days stay consecutive.
+///
+/// Daily streaks are freeze-aware ("streak forgiveness"): the user earns one freeze per
+/// `freezeEarnEvery` consecutive active days (capped at `maxFreezes`), and a freeze is auto-spent
+/// to bridge a missed day so a single slip doesn't nuke a long streak. Freezes are derived by a
+/// deterministic forward simulation over the history — no stateful spend to persist.
 enum StreakCalculator {
+    static let freezeEarnEvery = 7
+    static let maxFreezes = 2
+
     static func compute(activeDays: Set<String>, now: Date, calendar: Calendar) -> StreakResult {
         let today = CalendarKeys.dayKey(now, calendar)
+        let sim = simulateDaily(activeDays: activeDays, now: now, calendar: calendar)
         return StreakResult(
-            currentDailyStreak: currentDaily(activeDays: activeDays, now: now, calendar: calendar),
-            longestDailyStreak: longestDaily(activeDays: activeDays, calendar: calendar),
+            currentDailyStreak: sim.current,
+            longestDailyStreak: sim.longest,
             currentWeeklyStreak: currentWeekly(activeDays: activeDays, now: now, calendar: calendar),
-            isActiveToday: activeDays.contains(today)
+            isActiveToday: activeDays.contains(today),
+            freezesAvailable: sim.freezes
         )
     }
 
-    /// Anchor at today if active, else yesterday if active (so a not-yet-dictated today does
-    /// NOT break the streak until a full day has passed), then walk back over active days.
-    private static func currentDaily(activeDays: Set<String>, now: Date, calendar: Calendar) -> Int {
+    private struct DailySim { var current: Int; var longest: Int; var freezes: Int }
+
+    /// Walk forward one calendar day at a time from the earliest active day through today,
+    /// growing the streak on active days, earning freezes at each `freezeEarnEvery` boundary,
+    /// and auto-spending a freeze to bridge a missed day (reset only when none remain). Today is
+    /// never treated as a miss — the streak survives until the day actually ends.
+    private static func simulateDaily(activeDays: Set<String>, now: Date, calendar: Calendar) -> DailySim {
+        guard let firstKey = activeDays.min(),
+              let firstDate = CalendarKeys.date(fromDayKey: firstKey, calendar)
+        else { return DailySim(current: 0, longest: 0, freezes: 0) }
+
         let startOfToday = calendar.startOfDay(for: now)
-        let today = CalendarKeys.dayKey(now, calendar)
-        let yesterdayDate = calendar.date(byAdding: .day, value: -1, to: startOfToday)!
-        let yesterday = CalendarKeys.dayKey(yesterdayDate, calendar)
+        let todayKey = CalendarKeys.dayKey(now, calendar)
 
-        var cursor: Date
-        if activeDays.contains(today) {
-            cursor = startOfToday
-        } else if activeDays.contains(yesterday) {
-            cursor = yesterdayDate
-        } else {
-            return 0
-        }
+        var streak = 0, longest = 0, freezes = 0
+        var cursor = calendar.startOfDay(for: firstDate)
 
-        var count = 0
-        while activeDays.contains(CalendarKeys.dayKey(cursor, calendar)) {
-            count += 1
-            cursor = calendar.date(byAdding: .day, value: -1, to: cursor)!
-        }
-        return count
-    }
-
-    /// Longest run of consecutive calendar days anywhere in the history.
-    private static func longestDaily(activeDays: Set<String>, calendar: Calendar) -> Int {
-        guard !activeDays.isEmpty else { return 0 }
-        let sorted = activeDays.sorted()   // lexical == chronological for zero-padded keys
-        var longest = 1
-        var run = 1
-        for i in 1..<sorted.count {
-            if let prev = CalendarKeys.date(fromDayKey: sorted[i - 1], calendar),
-               let next = calendar.date(byAdding: .day, value: 1, to: prev),
-               CalendarKeys.dayKey(next, calendar) == sorted[i] {
-                run += 1
-            } else {
-                run = 1
+        while cursor <= startOfToday {
+            let key = CalendarKeys.dayKey(cursor, calendar)
+            if activeDays.contains(key) {
+                streak += 1
+                if streak % freezeEarnEvery == 0 { freezes = min(maxFreezes, freezes + 1) }
+                longest = max(longest, streak)
+            } else if key != todayKey {
+                // A missed day in the past: spend a freeze to bridge it, else the streak breaks.
+                if freezes > 0 { freezes -= 1 } else { streak = 0 }
             }
-            longest = max(longest, run)
+            // else: today, not yet active — grace, leave the streak untouched.
+
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
         }
-        return longest
+        return DailySim(current: streak, longest: longest, freezes: freezes)
     }
 
     /// Weekly streak: a week counts if it saw ≥1 active day. Anchor at this week if active,
-    /// else last week, then step back a week at a time.
+    /// else last week, then step back a week at a time. (Not freeze-aware.)
     private static func currentWeekly(activeDays: Set<String>, now: Date, calendar: Calendar) -> Int {
         var activeWeeks = Set<String>()
         for dayKey in activeDays {

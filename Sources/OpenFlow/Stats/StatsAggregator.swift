@@ -20,14 +20,17 @@ struct InsightsSnapshot: Equatable {
     var longestDailyStreak: Int
     var currentWeeklyStreak: Int
     var isActiveToday: Bool
+    var freezesAvailable: Int
     var perApp: [AppUsage]
     var unlockedAchievements: [Achievement]
+    var heatmap: [[HeatCell]]
 
     static let empty = InsightsSnapshot(
         totalWords: 0, totalDictations: 0, averageWPM: 0,
         topPercent: 99, topPercentText: PercentileTable.formatted(99),
         timeSavedSeconds: 0, currentDailyStreak: 0, longestDailyStreak: 0,
-        currentWeeklyStreak: 0, isActiveToday: false, perApp: [], unlockedAchievements: []
+        currentWeeklyStreak: 0, isActiveToday: false, freezesAvailable: 0,
+        perApp: [], unlockedAchievements: [], heatmap: []
     )
 }
 
@@ -62,6 +65,7 @@ enum StatsAggregator {
             .sorted { $0.words > $1.words }
 
         let unlocked = AchievementCatalog.all.filter { unlockedIDs.contains($0.id) }
+        let heatmap = HeatmapBuilder.grid(days: days, now: now, calendar: calendar)
 
         return InsightsSnapshot(
             totalWords: totals.totalWords,
@@ -74,8 +78,10 @@ enum StatsAggregator {
             longestDailyStreak: streak.longestDailyStreak,
             currentWeeklyStreak: streak.currentWeeklyStreak,
             isActiveToday: streak.isActiveToday,
+            freezesAvailable: streak.freezesAvailable,
             perApp: perApp,
-            unlockedAchievements: unlocked
+            unlockedAchievements: unlocked,
+            heatmap: heatmap
         )
     }
 }

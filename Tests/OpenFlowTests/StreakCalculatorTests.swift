@@ -95,4 +95,53 @@ final class StreakCalculatorTests: XCTestCase {
         let r = StreakCalculator.compute(activeDays: days, now: now(2026, 7, 17), calendar: cal)
         XCTAssertEqual(r.currentWeeklyStreak, 1)
     }
+
+    // MARK: - Streak freeze (forgiveness)
+
+    private func consecutiveDays(from start: (Int, Int, Int), count: Int) -> Set<String> {
+        var out = Set<String>()
+        var d = StatsTestSupport.date(start.0, start.1, start.2, 12, 0, calendar: cal)
+        for _ in 0..<count {
+            out.insert(CalendarKeys.dayKey(d, cal))
+            d = cal.date(byAdding: .day, value: 1, to: d)!
+        }
+        return out
+    }
+
+    func testNoFreezeBeforeSevenDays() {
+        let r = StreakCalculator.compute(activeDays: consecutiveDays(from: (2026, 7, 14), count: 4),
+                                         now: now(2026, 7, 17), calendar: cal)
+        XCTAssertEqual(r.currentDailyStreak, 4)
+        XCTAssertEqual(r.freezesAvailable, 0)
+    }
+
+    func testEarnsOneFreezeAtSevenDays() {
+        let r = StreakCalculator.compute(activeDays: consecutiveDays(from: (2026, 7, 11), count: 7),
+                                         now: now(2026, 7, 17), calendar: cal)
+        XCTAssertEqual(r.currentDailyStreak, 7)
+        XCTAssertEqual(r.freezesAvailable, 1)
+    }
+
+    func testFreezeBridgesASingleMissedDay() {
+        // 8 active days (earns 1 freeze at day 7), miss one day, then active again today.
+        var days = consecutiveDays(from: (2026, 7, 1), count: 8)   // 07-01…07-08
+        days.insert("2026-07-10")                                  // gap on 07-09
+        let r = StreakCalculator.compute(activeDays: days, now: now(2026, 7, 10), calendar: cal)
+        XCTAssertEqual(r.currentDailyStreak, 9)   // freeze bridged the gap
+        XCTAssertEqual(r.freezesAvailable, 0)     // and was consumed
+    }
+
+    func testTwoMissedDaysWithOneFreezeBreaks() {
+        var days = consecutiveDays(from: (2026, 7, 1), count: 8)   // earns 1 freeze
+        days.insert("2026-07-12")                                  // 07-09 and 07-10 both missed
+        let r = StreakCalculator.compute(activeDays: days, now: now(2026, 7, 12), calendar: cal)
+        XCTAssertEqual(r.currentDailyStreak, 1)   // one freeze bridged 07-09, 07-10 broke it
+    }
+
+    func testFreezesCapAtTwo() {
+        let r = StreakCalculator.compute(activeDays: consecutiveDays(from: (2026, 7, 1), count: 21),
+                                         now: now(2026, 7, 21), calendar: cal)
+        XCTAssertEqual(r.currentDailyStreak, 21)
+        XCTAssertEqual(r.freezesAvailable, 2)     // earned at 7/14/21, capped at 2
+    }
 }

@@ -96,9 +96,9 @@ enum AchievementEngine {
             case .firstDictation:
                 crossed = old.totalDictations == 0 && new.totalDictations >= 1
             case .totalWords:
-                crossed = new.totalWords >= a.threshold
+                crossed = old.totalWords < a.threshold && new.totalWords >= a.threshold
             case .dailyStreak:
-                crossed = new.currentDailyStreak >= a.threshold
+                crossed = old.currentDailyStreak < a.threshold && new.currentDailyStreak >= a.threshold
             }
             if crossed { result.append(a) }
         }

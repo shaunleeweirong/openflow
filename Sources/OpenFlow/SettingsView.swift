@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var entries: [DictionaryEntry] = []
     @State private var newSpoken = ""
     @State private var newWritten = ""
+    @State private var showResetConfirm = false
 
     var body: some View {
         Form {
@@ -93,6 +94,22 @@ struct SettingsView: View {
                     .disabled(newSpoken.trimmingCharacters(in: .whitespaces).isEmpty
                         || newWritten.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+            }
+
+            Section("Insights") {
+                Toggle("Track dictation stats", isOn: bind(\.statsEnabled))
+                Toggle("Break down by app", isOn: bind(\.perAppTracking))
+                    .disabled(!settings.statsEnabled)
+                Text("Stats live only on this Mac and are never uploaded. The per-app breakdown records which app you dictated into — off by default.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Reset stats…", role: .destructive) { showResetConfirm = true }
+                    .confirmationDialog("Reset all stats?", isPresented: $showResetConfirm) {
+                        Button("Reset stats", role: .destructive) { StatsStore.shared.reset() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This permanently deletes your word counts, streaks, and achievements.")
+                    }
             }
 
             Section("General") {

@@ -14,6 +14,11 @@ final class SettingsStore: ObservableObject {
         static let dictionaryEntries = "dictionaryEntries"
         static let onboardingCompleted = "onboardingCompleted"
         static let aiEnhance = "aiEnhance"
+        static let statsEnabled = "statsEnabled"
+        static let perAppTracking = "perAppTracking"
+        static let unlockedAchievements = "unlockedAchievements"
+        static let lifetimeTotals = "lifetimeTotals"
+        static let statsAppNames = "statsAppNames"
     }
 
     private let defaults = UserDefaults.standard
@@ -27,6 +32,8 @@ final class SettingsStore: ObservableObject {
             Keys.modelVersion: "v3",
             Keys.onboardingCompleted: false,
             Keys.aiEnhance: false,
+            Keys.statsEnabled: true,      // fully local; on by default so the feature is discovered
+            Keys.perAppTracking: false,   // the one mildly-sensitive part — opt-in
         ])
     }
 
@@ -82,6 +89,50 @@ final class SettingsStore: ObservableObject {
             }
             objectWillChange.send()
         }
+    }
+
+    // MARK: - Usage stats (all local; never uploaded)
+
+    /// Record dictation usage for the Insights view. On by default.
+    var statsEnabled: Bool {
+        get { defaults.bool(forKey: Keys.statsEnabled) }
+        set { defaults.set(newValue, forKey: Keys.statsEnabled); objectWillChange.send() }
+    }
+
+    /// Break stats down by which app you dictated into. Opt-in (off by default).
+    var perAppTracking: Bool {
+        get { defaults.bool(forKey: Keys.perAppTracking) }
+        set { defaults.set(newValue, forKey: Keys.perAppTracking); objectWillChange.send() }
+    }
+
+    /// Unlocked achievement ids → the date they were earned.
+    var unlockedAchievements: [String: Date] {
+        get { decodeJSON([String: Date].self, Keys.unlockedAchievements) ?? [:] }
+        set { encodeJSON(newValue, Keys.unlockedAchievements) }
+    }
+
+    /// Cached lifetime totals so the menu summary / achievement diff never block on the file.
+    var lifetimeTotals: LifetimeTotals {
+        get { decodeJSON(LifetimeTotals.self, Keys.lifetimeTotals) ?? .empty }
+        set { encodeJSON(newValue, Keys.lifetimeTotals) }
+    }
+
+    /// bundleID → friendly app name, for the per-app breakdown labels.
+    var statsAppNames: [String: String] {
+        get { decodeJSON([String: String].self, Keys.statsAppNames) ?? [:] }
+        set { encodeJSON(newValue, Keys.statsAppNames) }
+    }
+
+    private func decodeJSON<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    private func encodeJSON<T: Encodable>(_ value: T, _ key: String) {
+        if let data = try? JSONEncoder().encode(value) {
+            defaults.set(data, forKey: key)
+        }
+        objectWillChange.send()
     }
 
     // MARK: - Launch at login (only works from a bundled .app)

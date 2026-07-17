@@ -33,10 +33,12 @@ enum AppState: Equatable {
 final class MenuBarController {
     private let statusItem: NSStatusItem
     private let statusMenuItem = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
+    private let statsSummaryItem = NSMenuItem(title: "No dictations yet", action: nil, keyEquivalent: "")
     private let lastTranscriptItem = NSMenuItem(title: "No dictations yet", action: nil, keyEquivalent: "")
 
     var onOpenSettings: (() -> Void)?
     var onOpenPermissions: (() -> Void)?
+    var onOpenInsights: (() -> Void)?
     var onCopyLastTranscript: (() -> Void)?
     var onCopyRawTranscript: (() -> Void)?
 
@@ -46,6 +48,8 @@ final class MenuBarController {
         let menu = NSMenu()
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
+        statsSummaryItem.isEnabled = false
+        menu.addItem(statsSummaryItem)
         menu.addItem(.separator())
 
         lastTranscriptItem.isEnabled = false
@@ -57,6 +61,10 @@ final class MenuBarController {
         copyRawItem.target = self
         menu.addItem(copyRawItem)
         menu.addItem(.separator())
+
+        let insightsItem = NSMenuItem(title: "Insights…", action: #selector(openInsights), keyEquivalent: "i")
+        insightsItem.target = self
+        menu.addItem(insightsItem)
 
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -95,8 +103,14 @@ final class MenuBarController {
         lastTranscriptItem.title = trimmed.isEmpty ? "No dictations yet" : "“\(trimmed)”"
     }
 
+    /// One-line usage summary shown at the top of the menu (e.g. "🔥 5-day streak · 12,480 words").
+    func setStatsSummary(_ text: String) {
+        statsSummaryItem.title = text
+    }
+
     @objc private func openSettings() { onOpenSettings?() }
     @objc private func openPermissions() { onOpenPermissions?() }
+    @objc private func openInsights() { onOpenInsights?() }
     @objc private func copyLast() { onCopyLastTranscript?() }
     @objc private func copyRaw() { onCopyRawTranscript?() }
 }

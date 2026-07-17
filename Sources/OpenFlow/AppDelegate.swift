@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -14,8 +15,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }()
 
+    private let stats = StatsStore.shared
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+    private var insightsWindow: NSWindow?
+    private var toastWindow: NSWindow?
+    private var toastDismiss: DispatchWorkItem?
+    private var pendingTargetBundleID: String?
+    private var pendingTargetName: String?
+    private var cancellables = Set<AnyCancellable>()
     private var lastTranscript = ""
     private var lastRawTranscript = ""
 
@@ -36,6 +44,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(self.lastRawTranscript, forType: .string)
         }
+        menuBar.onOpenInsights = { [weak self] in self?.showInsights() }
+
+        stats.onAchievementUnlocked = { [weak self] achievement in
+            self?.showAchievementToast(achievement)
+        }
+        // Keep the menu's usage summary current — fires on every record and on reset.
+        stats.$snapshot
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snap in
+                self?.menuBar.setStatsSummary(StatsStore.summaryText(for: snap))
+            }
+            .store(in: &cancellables)
 
         engine.onStateChange = { [weak self] state in
             DispatchQueue.main.async { self?.handleEngineState(state) }
@@ -71,6 +91,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showOnboarding()
             return
         }
+        // At hotkey-down the frontmost app is the one being dictated into (OpenFlow is a
+        // menu-bar app and doesn't take focus). Capture it now for the per-app breakdown.
+        let front = NSWorkspace.shared.frontmostApplication
+        pendingTargetBundleID = front?.bundleIdentifier
+        pendingTargetName = front?.localizedName
+
         do {
             try capture.start()
             menuBar.setState(.recording)
@@ -115,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             mode: self.settings.injectionMode,
                             restoreClipboard: self.settings.restoreClipboard
                         )
+                        self.recordStats(for: cleaned, samples: samples)
                     }
                     self.menuBar.setState(.ready)
                 }
@@ -185,5 +212,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func showInsights() {
+        if insightsWindow == nil {
+            let view = InsightsView(stats: stats)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 560),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "OpenFlow Insights"
+            window.contentView = NSHostingView(rootView: view)
+            window.isReleasedWhenClosed = false
+            window.center()
+            insightsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        insightsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - Stats
+
+    private func recordStats(for text: String, samples: [Float]) {
+        guard settings.statsEnabled else { return }
+        let event = DictationEvent(
+            date: Date(),
+            wordCount: WordCounter.count(text),
+            spokenSeconds: Double(samples.count) / AudioCapture.targetSampleRate,
+            appBundleID: settings.perAppTracking ? pendingTargetBundleID : nil,
+            appName: settings.perAppTracking ? pendingTargetName : nil
+        )
+        stats.record(event)
+    }
+
+    /// A permission-free celebration: a borderless, non-activating floating window shown
+    /// top-center that auto-dismisses. No `UNUserNotification`, so no permission prompt and no
+    /// focus stolen from the app the user is working in.
+    private func showAchievementToast(_ achievement: Achievement) {
+        let host = NSHostingView(rootView: AchievementToastView(achievement: achievement))
+        let size = host.fittingSize
+
+        let window: NSWindow
+        if let existing = toastWindow {
+            window = existing
+        } else {
+            window = NSWindow(
+                contentRect: NSRect(origin: .zero, size: size),
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.level = .floating
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = false
+            window.ignoresMouseEvents = true
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            toastWindow = window
+        }
+        window.contentView = host
+        window.setContentSize(size)
+
+        if let screen = NSScreen.main {
+            let vf = screen.visibleFrame
+            window.setFrameOrigin(NSPoint(x: vf.midX - size.width / 2, y: vf.maxY - size.height - 12))
+        }
+        window.orderFrontRegardless()
+
+        toastDismiss?.cancel()
+        let work = DispatchWorkItem { [weak window] in window?.orderOut(nil) }
+        toastDismiss = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: work)
     }
 }
